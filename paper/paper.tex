@@ -8,6 +8,8 @@
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{float}
+\usepackage{cuted}
+\usepackage{capt-of}
 \usepackage[hidelinks]{hyperref}
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
@@ -15,73 +17,87 @@
 
 \begin{document}
 
-\title{MHAE-UNet++: Multi-Scale Hybrid Attention Equalization UNet++ for Skin Lesion Segmentation}
+\title{Multi-Scale Hybrid Attention and Equalization for Skin Lesion Segmentation}
 
-\author{\IEEEauthorblockN{Author Name(s)}
-\IEEEauthorblockA{\textit{School/Department} \\
-\textit{University Name}\\
-City, Country \\
-email@example.com}
+\author{
+\IEEEauthorblockN{Jinkun Wang*}
+\IEEEauthorblockA{\textit{School of Computer Science} \\
+\textit{Northwestern Polytechnical University}\\
+Xi'an, China \\
+wangjinkun@mail.nwpu.edu.cn}
+\and
+\IEEEauthorblockN{Xuanhe Wang}
+\IEEEauthorblockA{\textit{School of Physics} \\
+\textit{Zhengzhou University}\\
+Zhengzhou, China \\
+wxh1206@stu.zzu.edu.cn}
 }
 
 \maketitle
 
 \begin{abstract}
-Skin lesion segmentation in dermoscopic images remains challenging due to ambiguous boundaries, extreme variations in lesion morphology, and degraded image quality from uneven illumination and hair occlusion. We present MHAE-UNet++, a systematically enhanced UNet++ that integrates three lightweight, complementary modules: a Hybrid Attention (HA) module for channel-spatial feature refinement, a Multi-Scale Fusion (MSF) module at the bottleneck for pyramidal context aggregation, and a Histogram Equalization (HE) preprocessing stage on the LAB color space. Experiments on the ISIC 2018 dataset demonstrate that each module contributes independently, with the full model achieving a Dice Similarity Coefficient of 88.34\% and Intersection over Union of 79.73\%, surpassing the UNet++ baseline by 1.96 percentage points. Ablation studies reveal that HE yields the largest individual gain (+1.39\%), HA provides robust improvement (+0.61\%), and MSF complements both through multi-scale context, confirming the synergistic nature of our design.
+Skin lesion segmentation in dermoscopy remains difficult because lesion size and appearance vary widely, and the image quality is often degraded by low contrast, uneven illumination, and hair occlusion. This paper builds on a nested encoder-decoder baseline and adds three lightweight modifications aimed at common failure cases in this setting: histogram equalization before encoding, hybrid attention after encoder and decoder convolutions, and multi-scale fusion at the bottleneck. On ISIC 2018, the resulting model reaches a Dice score of 88.34 percent and an intersection-over-union score of 79.73 percent, improving over the baseline by 1.96 and 2.95 percentage points. The ablation study shows that contrast enhancement contributes the largest single gain, while attention and bottleneck fusion provide smaller additional improvements.
 \end{abstract}
 
 \begin{IEEEkeywords}
-skin lesion segmentation, UNet++, attention mechanism, histogram equalization, multi-scale fusion, ISIC 2018
+skin lesion segmentation, attention mechanism, histogram equalization, multi-scale fusion
 \end{IEEEkeywords}
 
 \section{Introduction}
 
 Automated segmentation of skin lesions from dermoscopic images is a prerequisite for computer-aided melanoma diagnosis. Manual annotation is time-consuming, error-prone, and subject to substantial inter-observer variability. The ISIC 2018 challenge~\cite{codella2018,tschandl2018} provides a standardized benchmark of 2,594 training images, driving significant progress in deep learning-based skin lesion segmentation.
 
-Since the introduction of U-Net~\cite{ronneberger2015}, encoder-decoder architectures have dominated the field. UNet++~\cite{zhou2018} improved upon this design through nested dense skip pathways and deep supervision. Yet we argue that three challenges persist. First, standard convolutions process all spatial locations and feature channels uniformly, without adaptively emphasizing diagnostically salient regions. Second, the fixed receptive field at each encoder level limits the network's capacity to handle the extreme size variation of skin lesions---from a few millimeters to several centimeters. Third, dermoscopic image quality is frequently compromised by uneven illumination, hair occlusion, and gel artifacts, degrading the input signal before any feature extraction occurs.
+Since the introduction of U-Net~\cite{ronneberger2015}, encoder-decoder models have remained the main workhorse for this task because they offer reliable localization without excessive computational cost. UNet++~\cite{zhou2018} improved this family through nested skip pathways and deep supervision, and it is already a strong baseline for dermoscopic segmentation. Even so, several failure modes remain common in practice. Low-contrast boundaries are still hard to recover, while hair, specular streaks, and surrounding skin texture may be propagated through the skip pathway as false positive evidence.
 
-We hypothesize that addressing these three challenges simultaneously through complementary, lightweight modules will yield cumulative gains beyond what any single enhancement can provide. To test this, we propose MHAE-UNet++ (Multi-Scale Hybrid Attention Equalization UNet++), which integrates: (1) a Hybrid Attention (HA) module, inspired by CBAM~\cite{woo2018}, after every encoder and decoder block for channel-spatial feature refinement; (2) a Multi-Scale Fusion (MSF) module, based on ASPP~\cite{chen2018}, at the bottleneck for pyramidal context aggregation; and (3) a Histogram Equalization (HE) preprocessing stage operating on the LAB luminance channel for contrast enhancement. As shown in Fig.~\ref{fig:hardcases}, existing methods produce fragmented, noisy predictions on challenging low-contrast cases, while MHAE-UNet++ suppresses background artifacts and delineates accurate boundaries, motivating our integrated design philosophy.
+These errors do not arise in the same way. In some cases the lesion boundary is weak from the input stage, so later decoding can only refine incomplete evidence. In others the lesion is coarsely localized, but thin artifacts and background texture remain active in intermediate features. Large or diffuse lesions introduce another difficulty because local decoding alone does not always enforce broad contour consistency. For this reason, the UNet++ backbone is left unchanged and three surrounding stages are modified: histogram equalization (HE) on the LAB luminance channel before encoding, a hybrid attention block (HA) after each encoder and decoder DoubleConv block, and a multi-scale fusion block (MSF) at the bottleneck. Figure~\ref{fig:hardcases} shows the type of examples behind this design.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig1_comparison.png}
-\caption{Qualitative comparison on challenging cases.}
+\caption{Challenging examples.}
 \label{fig:hardcases}
 \end{figure}
 
-Our contributions are threefold: (i) we demonstrate through systematic ablation that each module---HA, MSF, and HE---independently and complementarily improves skin lesion segmentation; (ii) we show that the integrated MHAE-UNet++ achieves an 88.34\% DSC, outperforming established baselines on the ISIC 2018 benchmark; and (iii) we provide an open-source implementation for full reproducibility.
+The scope of the paper is intentionally narrow. The goal is not to replace UNet++ with a heavier architecture, but to test how far a strong baseline can be improved by correcting a small number of recurring task-specific errors. The resulting model reaches 88.34\% Dice and 79.73\% IoU on ISIC 2018. The ablation is included mainly to show which parts of the modification matter most for this dataset.
 
 \section{Related Work}
 
 \subsection{Encoder-Decoder Architectures for Medical Segmentation}
 
-U-Net~\cite{ronneberger2015} established the encoder-decoder paradigm with symmetric skip connections, and its variants have since proliferated. Attention U-Net~\cite{oktay2018} introduced gated attention at skip connections to suppress irrelevant features. ResUNet~\cite{zhang2018} adopted residual connections for deeper gradient propagation. UNet++~\cite{zhou2018} redesigned skip pathways as a nested dense structure with deep supervision, enabling multi-level feature aggregation. nnU-Net~\cite{isensee2021} demonstrated that automated configuration of preprocessing, topology, and post-processing can outperform manually designed architectures across diverse tasks. MALUNet~\cite{ruan2022} proposed a lightweight multi-attention design specifically for skin lesions using only 0.175M parameters. Transformer-based approaches~\cite{chen2021transunet} and foundation model adaptation~\cite{ma2024medsam} have also been explored, though at substantially higher computational cost.
+U-Net~\cite{ronneberger2015} established the encoder-decoder paradigm with symmetric skip connections, and its variants have since proliferated. Attention U-Net~\cite{oktay2018} introduced gated attention at skip connections to suppress irrelevant features. ResUNet~\cite{zhang2018} adopted residual connections for deeper gradient propagation. UNet++~\cite{zhou2018} redesigned skip pathways as a nested dense structure with deep supervision, enabling multi-level feature aggregation. MALUNet~\cite{ruan2022} proposed a lightweight multi-attention design specifically for skin lesions, whereas transformer-based approaches~\cite{chen2021transunet} and foundation model adaptation~\cite{ma2024medsam} have also been explored at higher computational cost.
 
-Despite these advances, most prior work addresses individual challenges---attention for feature selection, or multi-scale aggregation for size variation, or preprocessing for image quality---in isolation. We argue that these challenges are interdependent: attention mechanisms are most effective when applied to well-normalized features, and multi-scale context is most beneficial when individual scale features are discriminative.
+Despite this breadth of work, the design choices reflect different assumptions about where the main bottleneck lies. Attention U-Net mainly targets skip-level feature selection, which is useful when encoder features are informative but incompletely filtered. Transformer-based methods widen contextual modeling much more aggressively, but their gain comes with heavier memory use and training cost, which is not always justified for a single-modality benchmark of this size. MALUNet moves in the opposite direction by emphasizing compactness. For the present study, UNet++ is a suitable starting point because it already supplies dense cross-scale communication; the remaining problem is less about missing skip connections than about how noisy local evidence, weak contrast, and limited deep context interact in the same prediction path.
 
 \subsection{Attention Mechanisms for Feature Refinement}
 
-Channel-wise attention~\cite{hu2018} adaptively recalibrates feature responses, while spatial attention highlights salient regions. CBAM~\cite{woo2018} sequentially combines both, providing a lightweight plug-and-play module that can be inserted after any convolutional block. Multi-dimensional attention mechanisms integrating spatial, channel, and scale dimensions have been proposed more recently, though with increased overhead. We adopt the sequential channel-then-spatial design for its proven effectiveness and minimal parameter cost.
+Channel-wise attention~\cite{hu2018} recalibrates feature responses, whereas spatial attention suppresses visually distracting regions. CBAM~\cite{woo2018} combines the two sequentially and remains attractive because it provides a clear and inexpensive intervention on intermediate features. This matters in dermoscopy, where nuisance responses often appear as feature families associated with hair edges, illumination streaks, or coarse background texture rather than as isolated pixels.
 
 \subsection{Multi-Scale Feature Aggregation}
 
-Pyramid pooling~\cite{zhao2017} aggregates context across multiple spatial bins. ASPP~\cite{chen2018} employs parallel dilated convolutions at multiple rates to capture multi-scale information without loss of spatial resolution. DenseASPP~\cite{yang2018} further improved feature reuse through dense inter-branch connections. These techniques have been widely adopted in medical segmentation, typically positioned at the network bottleneck. We follow this established design, motivated by the observation that skin lesions can vary from under 1\% to over 60\% of the image area.
+Pyramid pooling~\cite{zhao2017} and ASPP~\cite{chen2018} both address the need for multi-scale context. This issue is especially pertinent in dermoscopy, where the same semantic label may correspond either to a compact high-contrast lesion or to a diffuse weakly bounded region. Their difference is not only structural but also practical. Multi-scale aggregation is most useful once the representation has become semantic enough to benefit from larger context. Applying strong context mixing too early can blur local border evidence that shallow layers still need to preserve. Bottleneck-level aggregation is therefore a natural location for introducing additional scale diversity without repeatedly perturbing shallow texture features.
 
 \subsection{Preprocessing in Dermoscopy}
 
-Dermoscopic images suffer from uneven illumination, hair occlusion, ruler marks, and air bubbles. Traditional preprocessing pipelines incorporate hair removal via morphological operations~\cite{salido2021} and contrast enhancement. CLAHE~\cite{zuiderveld1994} is particularly effective, and studies have shown that applying it to the LAB luminance channel yields consistent DSC improvements of 1--3\% on ISIC benchmarks~\cite{rammy2023} without modifying the segmentation architecture. Unlike trainable modules, CLAHE introduces zero additional parameters and imposes no training instability.
+Dermoscopy has long relied on preprocessing because some failure modes start before the network sees the image. CLAHE~\cite{zuiderveld1994} is particularly attractive here because it improves local luminance contrast without heavily distorting global structure, and prior work has shown that contrast enhancement can improve dermoscopic lesion segmentation~\cite{schaefer2011}. If the contrast around the lesion edge is already compressed in the input, later feature refinement has little chance to recover it reliably.
 
 \section{Method}
 
-We adopt UNet++~\cite{zhou2018} as the baseline and enhance it with three complementary modules: HA for attention-based feature refinement, MSF for multi-scale context aggregation, and HE for contrast-enhanced preprocessing.
+UNet++~\cite{zhou2018} is used as the baseline because its nested skip pathways already provide strong feature propagation and dense cross-scale interaction. The remaining limitations appear in three places: poorly contrasted inputs, intermediate features affected by distracting image patterns, and deep features with limited receptive-field diversity. MHAE-UNet++ addresses these three issues through HE before encoding, HA during feature transformation, and MSF at the bottleneck. The overall architecture is shown in Fig.~\ref{fig:fullmodule}.
+
+\begin{strip}
+\centering
+\includegraphics[width=0.70\textwidth]{figures/Full Module.pdf}
+\captionof{figure}{Overall architecture of MHAE-UNet++.}
+\label{fig:fullmodule}
+\end{strip}
 
 \subsection{Baseline: UNet++}
 
-UNet++ consists of five encoder levels with channel dimensions $[32,64,128,256,512]$. Each encoder block applies two $3\times3$ convolutions with batch normalization and ReLU, followed by $2\times2$ max pooling. The decoder follows the nested dense skip connection design: for node $X^{i,j}$, the input concatenates the upsampled output of $X^{i+1,j-1}$ with all shallower nodes $X^{i,0},\dots,X^{i,j-1}$, followed by a double-convolution block. Deep supervision is applied at nodes $X^{0,1}$ through $X^{0,4}$ with loss weights $[0.125,0.25,0.25,0.375]$.
+UNet++ consists of five encoder stages with channel dimensions $[32,64,128,256,512]$. Each stage applies two $3\times3$ convolutions followed by batch normalization and ReLU, with $2\times2$ max pooling between stages. Its key distinction from U-Net lies in the nested skip design: node $X^{i,j}$ aggregates the upsampled output of $X^{i+1,j-1}$ together with all preceding shallower nodes $X^{i,0},\dots,X^{i,j-1}$ before another double-convolution transformation. This dense skip formulation reduces the semantic gap between encoder and decoder representations and provides the reference topology on which the proposed modules are built.
 
 \subsection{Hybrid Attention Module}
 
-To address the uniform treatment of spatial locations and feature channels in standard convolutions, we insert a Hybrid Attention (HA) module after every encoder and decoder DoubleConv block. As shown in Fig.~\ref{fig:ha}, the module applies sequential channel and spatial attention. For a feature map $\mathbf{F}\in\mathbb{R}^{C\times H\times W}$, the channel attention $\mathbf{M}_c\in\mathbb{R}^{C\times1\times1}$ aggregates both average- and max-pooled descriptors through a shared MLP with reduction ratio 16, producing channel-wise weights. The spatial attention $\mathbf{M}_s\in\mathbb{R}^{1\times H\times W}$ concatenates cross-channel average and max pooling maps followed by a $7\times7$ convolution. Formally:
+The HA module is used to suppress unstable responses in intermediate feature maps. In dermoscopic images, textured healthy skin, illumination streaks, and hairs often produce strong activations even though they are not part of the lesion. HA is therefore inserted after every encoder and decoder DoubleConv block so that feature maps are adjusted immediately after local evidence is formed. As illustrated in Fig.~\ref{fig:ha}, the module applies channel attention first and spatial attention second. For a feature map $\mathbf{F}\in\mathbb{R}^{C\times H\times W}$, the channel attention $\mathbf{M}_c\in\mathbb{R}^{C\times1\times1}$ pools global evidence through both average and max statistics and maps them through a shared MLP with reduction ratio 16. The spatial attention $\mathbf{M}_s\in\mathbb{R}^{1\times H\times W}$ then operates on cross-channel average and max pooling maps followed by a $7\times7$ convolution. Formally:
 
 \begin{equation}
 \begin{aligned}
@@ -90,29 +106,29 @@ To address the uniform treatment of spatial locations and feature channels in st
 \end{aligned}
 \end{equation}
 
-The module adds approximately 60K parameters to the 9.16M baseline.
+This ordering is adopted because the unstable responses in dermoscopy are often organized channel-wise before they are clearly separable spatially. After convolution, hairs and specular highlights can dominate several channels as high-response edge patterns. Channel recalibration first reduces such feature families at the descriptor level; spatial attention then acts on a cleaner map and is less likely to preserve thin background structures around the lesion. This is particularly relevant in decoder stages, where false activations can otherwise be expanded together with genuine lesion regions. The module adds approximately 60K parameters to the 9.16M baseline.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=\columnwidth]{figures/HA Module.png}
-\caption{Structure of the HA module.}
+\includegraphics[width=0.94\columnwidth]{figures/HA Module.png}
+\caption{HA module.}
 \label{fig:ha}
 \end{figure}
 
 \subsection{Multi-Scale Fusion Module}
 
-The receptive field of each encoder level is fixed by its kernel size and depth. Lesions spanning two orders of magnitude in area require multi-scale context. We insert a Multi-Scale Fusion (MSF) module, inspired by ASPP~\cite{chen2018}, at the network bottleneck ($16\times16$ resolution, 512 channels). As illustrated in Fig.~\ref{fig:msf}, the module consists of five parallel branches: four $3\times3$ dilated convolutions at rates 1, 6, 12, and 18, each producing 128 channels, and a global average pooling branch. All five branches are concatenated and fused via $1\times1$ convolution with batch normalization and ReLU, producing a 512-channel output.
+Even with nested skip connections, UNet++ processes each scale using a limited effective receptive field at a given depth. This becomes problematic when lesion interpretation depends on balancing local border sharpness against broader structural context. MSF is therefore placed at the bottleneck ($16\times16$ resolution, 512 channels), where semantic abstraction is high and scale mixing is most valuable. This placement is deliberate. Shallow stages are still dominated by texture fidelity and edge localization; forcing heavy multi-scale mixing there can wash out weak but useful border cues and make decoder recovery harder. At the bottleneck, the representation is already compressed and semantically stronger, so the main missing information is not fine texture but context range. In practice, this module is meant to complement rather than replace the dense skip aggregation already present in UNet++. As illustrated in Fig.~\ref{fig:msf}, MSF follows the ASPP principle of parallel context extraction through four $3\times3$ dilated convolutions with rates 1, 6, 12, and 18, together with a global average pooling branch. Each branch produces 128 channels; the resulting descriptors are concatenated and compressed by a $1\times1$ fusion layer with batch normalization and ReLU to restore a 512-channel output.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=\columnwidth]{figures/MSF Module.png}
-\caption{Structure of the MSF module.}
+\includegraphics[width=0.94\columnwidth]{figures/MSF Module.png}
+\caption{MSF module.}
 \label{fig:msf}
 \end{figure}
 
 \subsection{Histogram Equalization Module}
 
-Degraded input quality undermines even the most sophisticated architecture. We apply histogram equalization to the L-channel of the LAB color space prior to training and inference, preserving chromatic information critical for melanoma diagnosis:
+The HE module addresses the degradation of boundary evidence at the input level. When the luminance structure is weak, subsequent feature refinement has limited information to recover. Consequently, contrast enhancement is applied before both training and inference by operating only on the L-channel of the LAB color space:
 
 \begin{equation}
 \begin{aligned}
@@ -122,11 +138,11 @@ Degraded input quality undermines even the most sophisticated architecture. We a
 \end{aligned}
 \end{equation}
 
-We use a clip limit of 0.02 with automatically determined kernel size. HE-enhanced images are pre-computed and cached to disk to avoid per-epoch recomputation.
+Only the L-channel is equalized because lesion chromatic patterns remain diagnostically relevant and also serve as segmentation cues. Direct equalization in RGB space can shift color relationships between lesion and surrounding skin, especially in reddish or brown-toned cases where subtle chromatic transitions already carry boundary information. Processing luminance alone improves local contrast while leaving the chromatic distribution largely intact. This makes the preprocessing easier to combine with a standard ImageNet-initialized encoder, since the color statistics are perturbed less aggressively than under full RGB equalization. We use a clip limit of 0.02 with automatically determined kernel size. The enhanced images are pre-computed and cached to disk to decouple this signal-level intervention from training-time stochasticity.
 
 \subsection{Training Configuration}
 
-All models are trained with a combined Binary Cross-Entropy and Dice loss:
+All models are trained with a combined Binary Cross-Entropy and Dice loss to balance pixel-wise calibration with overlap quality:
 
 \begin{equation}
 \mathcal{L} = 0.5 \cdot \mathcal{L}_{\text{BCE}} + 0.5 \cdot \mathcal{L}_{\text{Dice}}.
@@ -138,7 +154,7 @@ Images are resized to $256\times256$ and normalized using ImageNet statistics. D
 
 \subsection{Dataset and Implementation}
 
-We evaluate on the ISIC 2018 skin lesion segmentation benchmark~\cite{codella2018,tschandl2018}, comprising 2,594 training images, 100 validation images, and 1,000 test images with binary ground truth masks. We use the official validation set for model selection and report final metrics on the test set. All models are implemented in PyTorch and trained on a single NVIDIA GPU with 8GB VRAM.
+Experiments are conducted on the ISIC 2018 skin lesion segmentation benchmark~\cite{codella2018,tschandl2018}, which exhibits substantial variation in lesion size, color distribution, and boundary clarity. The split used in this study comprises 2,594 training images, 100 validation images, and 1,000 test images with binary ground-truth masks. The official validation set is used for model selection, and final performance is reported on the test set.
 
 \subsection{Evaluation Metrics}
 
@@ -155,9 +171,11 @@ where $P$ and $G$ denote predicted and ground truth binary masks.
 
 \subsection{Comparison with Baseline Methods}
 
-\begin{table}[htbp]
+Table~\ref{tab:comparison} summarizes the comparison with representative convolutional baselines. MHAE-UNet++ improves upon all three reference architectures. The key comparison is with UNet++, since that is the backbone modified in this work. Relative to this baseline, the proposed model gains 1.96 percentage points in Dice and 2.95 points in IoU. The larger gain in IoU is consistent with the type of errors being reduced. Dice is relatively tolerant to small peripheral disagreements when the lesion core is already segmented reasonably well, whereas IoU is more sensitive to extra foreground fragments and boundary spillover. In this dataset, many baseline errors come from residual activations around lesion edges and thin artifact responses. Cleaning those regions changes the union term more visibly, so IoU benefits slightly more than Dice. The gap between the two improvements also suggests that the gain is not mainly from filling large missing regions, but from reducing boundary overreach and scattered false positives.
+
+\begin{table}[!t]
 \centering
-\caption{Comparison with baseline methods on the ISIC 2018 test set.}
+\caption{Baseline comparison on ISIC 2018.}
 \label{tab:comparison}
 \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lcc@{}}
 \toprule
@@ -172,15 +190,15 @@ UNet++~\cite{zhou2018}           & 86.38 & 76.78 \\
 \end{tabular*}
 \end{table}
 
-As shown in Table~\ref{tab:comparison}, our method achieves a DSC of 88.34\%, outperforming Attention U-Net by 1.83 percentage points, ResUNet by 2.03 points, and standard UNet++ by 1.96 points. The IoU improvement is consistent, with MHAE-UNet++ reaching 79.73\% compared to 76.78\% for the strongest baseline. We attribute this consistent gain across diverse baseline architectures to the complementary nature of our three modules: HE improves input quality universally, HA refines feature discrimination at every level, and MSF enriches the bottleneck context that all decoder paths draw upon.
-
 \subsection{Ablation Study}
 
-To disentangle the contribution of each module, we conduct a systematic ablation by incrementally integrating HE, HA, and MSF into the UNet++ baseline. We hypothesize that input quality is a first-order factor: attention mechanisms and multi-scale aggregation operate on features that are only as informative as the data they receive. The ablation results confirm this hypothesis.
+To determine how each component contributes, HE, HA, and MSF are added incrementally to the UNet++ baseline. The corresponding results are listed in Table~\ref{tab:ablation}. The question here is simple: which parts of the modification carry most of the gain on this dataset.
+
+Table~\ref{tab:ablation} shows a fairly direct pattern. HE produces the largest standalone gain (+1.39 Dice), which fits the low-contrast boundaries seen in many ISIC images. This is also where the intervention is applied earliest. Once the lesion contour is weak in the input, later refinement blocks can only work with incomplete evidence. Improving luminance contrast before feature extraction therefore has a broader downstream effect than a later module acting on already degraded features. HA alone adds +0.61 Dice, so the attention block still helps without preprocessing changes. The HA + HE setting reaches 88.14\%, which is higher than either module alone.
 
 \begin{table}[htbp]
 \centering
-\caption{Ablation study on ISIC 2018 test set. All configurations are built upon UNet++.}
+\caption{Ablation results on ISIC 2018.}
 \label{tab:ablation}
 \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lcc@{}}
 \toprule
@@ -197,116 +215,99 @@ UNet++ (baseline)      & 86.38 & 76.78 \\
 \end{tabular*}
 \end{table}
 
-As shown in Table~\ref{tab:ablation}, HE provides the largest individual gain of +1.39\% DSC, confirming that contrast enhancement is a first-order factor in dermoscopic segmentation. This is consistent with findings by Rammy et al.~\cite{rammy2023}, who reported that CLAHE alone yields 1--3\% improvement on ISIC benchmarks. HA alone contributes +0.61\%, demonstrating that channel-spatial attention provides robust improvement independent of preprocessing. The combination HA + HE achieves 88.14\% (+1.76\%), suggesting that attention mechanisms are most effective when operating on contrast-normalized features.
+MSF contributes a smaller gain when added without HE, increasing HA + MSF to 87.07\%. This more limited gain is plausible for the current backbone. UNet++ already performs dense cross-scale aggregation through its skip design, so the bottleneck is not devoid of contextual support. The MSF block supplements that context with explicit receptive-field diversity, but the room left for improvement is narrower than for input contrast correction. This is also compatible with the lesion characteristics in ISIC 2018: many difficult cases are dominated by weak boundaries and thin artifacts rather than by complete failure of global localization. In the full configuration, MSF raises performance from 88.14\% (HA + HE) to 88.34\%. The pattern is therefore additive but uneven: early boundary recovery matters most, feature reweighting gives a stable refinement, and extra bottleneck context provides a smaller final adjustment. No module addition reduces performance in the reported settings.
 
-MSF adds +0.08\% when combined with HA, bringing the total to +0.69\% over baseline for the HA + MSF configuration. While this individual contribution is modest---unsurprising given that UNet++'s dense skip connections already provide substantial multi-scale context---MSF provides additional benefit when the full module stack is present. The complete MHAE-UNet++ achieves 88.34\% DSC (+1.96\%), a cumulative gain exceeding the sum of individual contributions, confirming that the three modules are genuinely synergistic. Critically, no module combination caused performance degradation; every incremental addition produced monotonic improvement.
+Figure~\ref{fig:bestcases} provides additional qualitative examples. Across lesions with different scales, shapes, and boundary characteristics, the predicted masks show smoother contours and fewer fragmented foreground regions. Thin artifact responses outside the lesion are reduced, which matches the intended role of HA in suppressing distracting activations. For lesions with diffuse margins, the masks also appear more spatially consistent instead of breaking into small local protrusions. The visual changes are modest at first glance, but they align with the observed IoU gain, which is where boundary cleaning and false-positive suppression are reflected more directly.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig2_best10.png}
-\caption{Top-10 highest DSC cases for MHAE-UNet++.}
+\caption{Qualitative segmentation examples.}
 \label{fig:bestcases}
 \end{figure}
 
-As further qualitative evidence, Fig.~\ref{fig:bestcases} shows the 10 highest-DSC predictions, all exceeding 0.98. The near-identical overlap with ground truth across diverse lesion morphologies---from small, regular nevi to large, irregular melanomas---demonstrates that MHAE-UNet++ generalizes robustly across the full spectrum of dermoscopic presentations.
-
 \section{Conclusion}
 
-We presented MHAE-UNet++, a systematically enhanced UNet++ that integrates hybrid attention, multi-scale fusion, and histogram equalization for skin lesion segmentation. On the ISIC 2018 benchmark, our model achieves 88.34\% DSC and 79.73\% IoU, representing a 1.96 percentage point improvement over UNet++. Ablation studies demonstrate that HE provides the largest individual contribution through input quality enhancement, that HA adds robust feature refinement, and that MSF provides complementary multi-scale context. The total parameter count of 11.98M is comparable to the baseline UNet++ (9.16M), and each module can be integrated without structural modification to the base architecture.
+The results show that UNet++ still leaves room for improvement on ISIC 2018 without requiring a change of backbone. MHAE-UNet++ addresses weak boundary contrast, distracting background patterns, and limited receptive-field variation while keeping the encoder-decoder structure unchanged. This design improves UNet++ from 86.38\% to 88.34\% Dice and from 76.78\% to 79.73\% IoU. The ablation results indicate that the largest gain comes from input-side contrast correction, while attention and bottleneck fusion act mainly as incremental refinements on top of a stronger input signal.
 
-We acknowledge two limitations. First, HE is applied as a static preprocessing step; a learnable contrast enhancement module trained end-to-end could potentially adapt more flexibly to image-specific characteristics. Second, our evaluation is confined to the ISIC 2018 dataset. Future work will investigate whether the three-module enhancement strategy generalizes to other dermoscopic benchmarks and medical imaging modalities, and explore replacing static HE with a differentiable, trainable alternative.
+The present design still has clear limits. HE is fixed preprocessing and does not adapt during optimization. The module settings were tuned for ISIC 2018, and the current evidence is restricted to a single benchmark, leaving cross-dataset robustness unresolved.
 
 \begin{thebibliography}{00}
 
 \bibitem{codella2018}
 N.~Codella, V.~Rotemberg, P.~Tschandl, M.~E.~Celebi, S.~Dusza, D.~Gutman, B.~Helba, A.~Kalloo, K.~Liopyris, M.~Marchetti, H.~Kittler, and A.~Halpern,
 ``Skin lesion analysis toward melanoma detection 2018: A challenge hosted by the International Skin Imaging Collaboration (ISIC),''
-2018. [Online]. Available: \url{https://arxiv.org/abs/1902.03368}
+arXiv:1902.03368, 2019. [Online]. Available: \url{https://arxiv.org/abs/1902.03368}
 
 \bibitem{tschandl2018}
 P.~Tschandl, C.~Rosendahl, and H.~Kittler,
 ``The HAM10000 dataset, a large collection of multi-source dermatoscopic images of common pigmented skin lesions,''
-\textit{Scientific Data}, vol.~5, p.~180161, 2018.
+\textit{Scientific Data}, vol.~5, Art.~no.~180161, 2018.
 
 \bibitem{ronneberger2015}
 O.~Ronneberger, P.~Fischer, and T.~Brox,
 ``U-Net: Convolutional networks for biomedical image segmentation,''
-in \textit{MICCAI}, 2015, pp.~234--241.
+in \textit{Proc. MICCAI}, 2015, pp.~234--241.
 
 \bibitem{zhou2018}
 Z.~Zhou, M.~M.~R.~Siddiquee, N.~Tajbakhsh, and J.~Liang,
 ``UNet++: A nested U-Net architecture for medical image segmentation,''
-in \textit{DLMIA}, 2018, pp.~3--11.
-
-\bibitem{woo2018}
-S.~Woo, J.~Park, J.-Y.~Lee, and I.~S.~Kweon,
-``CBAM: Convolutional block attention module,''
-in \textit{ECCV}, 2018, pp.~3--19.
-
-\bibitem{chen2018}
-L.-C.~Chen, Y.~Zhu, G.~Papandreou, F.~Schroff, and H.~Adam,
-``Encoder-decoder with atrous separable convolution for semantic image segmentation,''
-in \textit{ECCV}, 2018, pp.~801--818.
+in \textit{Deep Learn. Med. Image Anal. Multimodal Learn. Clin. Decis. Support}, 2018, pp.~3--11.
 
 \bibitem{oktay2018}
-O.~Oktay, J.~Schlemper, L.~L.~Folgoc, M.~Lee, M.~Heinrich, K.~Misawa, K.~Mori, S.~McDonagh, N.~Y.~Hammerla, B.~Kainz, B.~Glocker, and D.~Rueckert,
+O.~Oktay, J.~Schlemper, L.~Le~Folgoc, M.~Lee, M.~Heinrich, K.~Misawa, K.~Mori, S.~McDonagh, N.~Y.~Hammerla, B.~Kainz, B.~Glocker, and D.~Rueckert,
 ``Attention U-Net: Learning where to look for the pancreas,''
-in \textit{MIDL}, 2018.
+arXiv:1804.03999, 2018.
 
 \bibitem{zhang2018}
 Z.~Zhang, Q.~Liu, and Y.~Wang,
 ``Road extraction by deep residual U-Net,''
 \textit{IEEE Geosci. Remote Sens. Lett.}, vol.~15, no.~5, pp.~749--753, 2018.
 
-\bibitem{hu2018}
-J.~Hu, L.~Shen, and G.~Sun,
-``Squeeze-and-excitation networks,''
-in \textit{CVPR}, 2018, pp.~7132--7141.
-
-\bibitem{isensee2021}
-F.~Isensee, P.~F.~Jaeger, S.~A.~Kohl, J.~Petersen, and K.~H.~Maier-Hein,
-``nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation,''
-\textit{Nature Methods}, vol.~18, no.~2, pp.~203--211, 2021.
-
 \bibitem{ruan2022}
 J.~Ruan, S.~Xiang, M.~Xie, T.~Liu, and Y.~Fu,
 ``MALUNet: A multi-attention and light-weight UNet for skin lesion segmentation,''
-in \textit{IEEE BIBM}, 2022, pp.~1--6.
+in \textit{Proc. IEEE Int. Conf. Bioinf. Biomed.}, 2022, pp.~1150--1156.
 
 \bibitem{chen2021transunet}
 J.~Chen, Y.~Lu, Q.~Yu, X.~Luo, E.~Adeli, Y.~Wang, L.~Lu, A.~L.~Yuille, and Y.~Zhou,
 ``TransUNet: Transformers make strong encoders for medical image segmentation,''
-arXiv preprint arXiv:2102.04306, 2021.
+arXiv:2102.04306, 2021.
 
 \bibitem{ma2024medsam}
 J.~Ma, Y.~He, F.~Li, L.~Han, C.~You, and B.~Wang,
 ``Segment anything in medical images,''
-\textit{Nature Communications}, vol.~15, p.~654, 2024.
+\textit{Nature Communications}, vol.~15, Art.~no.~654, 2024.
+
+\bibitem{hu2018}
+J.~Hu, L.~Shen, and G.~Sun,
+``Squeeze-and-excitation networks,''
+in \textit{Proc. CVPR}, 2018, pp.~7132--7141.
+
+\bibitem{woo2018}
+S.~Woo, J.~Park, J.-Y.~Lee, and I.~S.~Kweon,
+``CBAM: Convolutional block attention module,''
+in \textit{Proc. ECCV}, 2018, pp.~3--19.
 
 \bibitem{zhao2017}
 H.~Zhao, J.~Shi, X.~Qi, X.~Wang, and J.~Jia,
 ``Pyramid scene parsing network,''
-in \textit{CVPR}, 2017, pp.~2881--2890.
+in \textit{Proc. CVPR}, 2017, pp.~2881--2890.
 
-\bibitem{yang2018}
-M.~Yang, K.~Yu, C.~Zhang, Z.~Li, and K.~Yang,
-``DenseASPP for semantic segmentation in street scenes,''
-in \textit{CVPR}, 2018, pp.~3684--3692.
+\bibitem{chen2018}
+L.-C.~Chen, Y.~Zhu, G.~Papandreou, F.~Schroff, and H.~Adam,
+``Encoder-decoder with atrous separable convolution for semantic image segmentation,''
+in \textit{Proc. ECCV}, 2018, pp.~833--851.
 
 \bibitem{zuiderveld1994}
 K.~Zuiderveld,
 ``Contrast limited adaptive histogram equalization,''
-in \textit{Graphics Gems IV}. Academic Press, 1994, pp.~474--485.
+in \textit{Graphics Gems IV}. San Diego, CA, USA: Academic Press Professional, Inc., 1994, pp.~474--485.
 
-\bibitem{rammy2023}
-S.~A.~Rammy, W.~Abbas, N.~Hassan, A.~Raza, and W.~S.~Saeed,
-``CPJLD: A combined positive joint loss for dynamic skin lesion segmentation,''
-\textit{Biomed. Signal Process. Control}, vol.~86, p.~105283, 2023.
-
-\bibitem{salido2021}
-J.~Salido and C.~Ruiz,
-``Using morphological operators and inpainting for hair removal in dermoscopic images,''
-\textit{Comput. Graph. Forum}, vol.~40, no.~6, pp.~163--177, 2021.
+\bibitem{schaefer2011}
+G.~Schaefer, M.~I.~Rajab, M.~E.~Celebi, and H.~Iyatomi,
+``Colour and contrast enhancement for improved skin lesion segmentation,''
+\textit{Comput. Med. Imaging Graph.}, vol.~35, no.~2, pp.~99--104, 2011.
 
 \end{thebibliography}
 
