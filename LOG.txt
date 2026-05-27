@@ -1,0 +1,45 @@
+AttentionUNet: 
+    test:
+        DSC: 0.8651
+        IoU: 0.7695
+
+
+ResNet:
+    test:
+        DSC: 0.8631
+        IoU: 0.7672
+
+
+UNet++:
+    test:
+        DSC: 0.8638
+        IoU: 0.7678
+
+
+UNetPlusPlus-CBAM:
+    test:
+        DSC: 0.8699
+        IoU: 0.7784
+
+
+UNetPlusPlus-CBAM-ASPP：
+    test：
+        DSC：0.8707
+        IoU：0.7799
+
+    
+UNetPlusPlus-CBAM-CLAHE：
+    test：
+        DSC：0.8814
+        IoU：0.7953
+
+
+UNetPlusPlus-CBAM-CLAHE-ASPP：
+    test：
+        DSC：0.8834
+        IoU：0.7973
+
+UNetPlusPlus-CLAHE:
+    test:
+        DSC: 0.8777
+        Iou: 0.7885s

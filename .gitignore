@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model checkpoints
+*.pth
+
+# Preprocessed tensors
+*.pt
+
+# Dataset - too large for GitHub
+ISIC2018/data/
+
+# Vendored packages
+.vendor_pymupdf/
+
+# LaTeX auxiliary
+*.aux
+*.log
+*.out
+texput.log
+
+# OS
+.DS_Store
+Thumbs.db
